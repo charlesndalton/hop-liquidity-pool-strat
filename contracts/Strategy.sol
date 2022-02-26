@@ -19,24 +19,34 @@ import {
 
 // Import interfaces for many popular DeFi projects, or add your own!
 //import "../interfaces/<protocol>/<Interface>.sol";
+import "../interfaces/hop/ISwap.sol";
 
 contract Strategy is BaseStrategy {
     using SafeERC20 for IERC20;
     using Address for address;
     using SafeMath for uint256;
 
-    constructor(address _vault) public BaseStrategy(_vault) {
-        // You can set these parameters on deployment to whatever you want
-        // maxReportDelay = 6300;
-        // profitFactor = 100;
-        // debtThreshold = 0;
+    ISwap public hopPool;
+    IERC20 public hopLPToken;
+
+    string internal strategyName;
+
+    constructor(
+        address _vault,
+        address _hopPool,
+        address _hopLPToken,
+        string memory _strategyName
+    ) public BaseStrategy(_vault) {
+        hopPool = ISwap(_hopPool);
+        hopLPToken = IERC20(_hopLPToken);
+        strategyName = _strategyName;
     }
 
     // ******** OVERRIDE THESE METHODS FROM BASE CONTRACT ************
 
     function name() external view override returns (string memory) {
-        // Add your own name here, suggestion e.g. "StrategyCreamYFI"
-        return "Strategy<ProtocolName><TokenType>";
+        // E.g., StrategyHopWETH
+        return strategyName;
     }
 
     function estimatedTotalAssets() public view override returns (uint256) {
@@ -59,8 +69,19 @@ contract Strategy is BaseStrategy {
     }
 
     function adjustPosition(uint256 _debtOutstanding) internal override {
-        // TODO: Do something to invest excess `want` tokens (from the Vault) into your positions
-        // NOTE: Try to adjust positions so that `_debtOutstanding` can be freed up on *next* harvest (not immediately)
+        if (emergencyExit) {
+            return;
+        }
+
+        uint256 _liquidAssets = wantBalance();
+
+        if (_liquidAssets > _debtOutstanding) {
+            uint256 _amountToInvest = _liquidAssets.sub(_debtOutstanding);
+
+            _checkAllowance(address(hopPool), address(want), _amountToInvest);
+
+            _depositToHopPool(_amountToInvest, address(want));
+        }
     }
 
     function liquidatePosition(uint256 _amountNeeded)
@@ -136,5 +157,36 @@ contract Strategy is BaseStrategy {
     {
         // TODO create an accurate price oracle
         return _amtInWei;
+    }
+
+    // ----------------- SUPPORT & UTILITY FUNCTIONS ----------
+
+    function wantBalance() public view returns (uint256) {
+        return want.balanceOf(address(this));
+    }
+
+    function _depositToHopPool(uint256 _amount, address _tokenToDeposit)
+        internal
+    {
+        // To deposit to Hop, we need to create an array of uints that tells Hop how much of each asset we want to deposit.
+        // If we were to deposit 100 WETH e.g., we would pass [100, 0] (forget decimals for simplicity).
+        // The order, i.e. whether it should be [100, 0] or [0, 100] can be retrieved w/ getTokenIndex().
+
+        uint256[] memory _amountsToDeposit = new uint256[](2);
+        _amountsToDeposit[hopPool.getTokenIndex(_tokenToDeposit)] = _amount;
+        hopPool.addLiquidity(_amountsToDeposit, 0, block.timestamp + 10000);
+    }
+
+    // _checkAllowance adapted from https://github.com/therealmonoloco/liquity-stability-pool-strategy/blob/1fb0b00d24e0f5621f1e57def98c26900d551089/contracts/Strategy.sol#L316
+
+    function _checkAllowance(
+        address _contract,
+        address _token,
+        uint256 _amount
+    ) internal {
+        if (IERC20(_token).allowance(address(this), _contract) < _amount) {
+            IERC20(_token).safeApprove(_contract, 0);
+            IERC20(_token).safeApprove(_contract, _amount);
+        }
     }
 }

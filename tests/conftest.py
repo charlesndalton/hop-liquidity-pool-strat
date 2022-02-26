@@ -40,9 +40,8 @@ def keeper(accounts):
 
 @pytest.fixture
 def token():
-    token_address = "0x6b175474e89094c44da98b954eedeac495271d0f"  # this should be the address of the ERC-20 used by the strategy/vault (DAI)
+    token_address = "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1" 
     yield Contract(token_address)
-
 
 @pytest.fixture
 def amount(accounts, token, user):
@@ -78,11 +77,23 @@ def vault(pm, gov, rewards, guardian, management, token):
 
 
 @pytest.fixture
-def strategy(strategist, keeper, vault, Strategy, gov):
-    strategy = strategist.deploy(Strategy, vault)
+def strategy(strategist, keeper, vault, Strategy, gov, hop_pool, hop_lp_token):
+    strategy = strategist.deploy(Strategy, vault, hop_pool, hop_lp_token, "DummyStrategyName")
     strategy.setKeeper(keeper)
     vault.addStrategy(strategy, 10_000, 0, 2 ** 256 - 1, 1_000, {"from": gov})
     yield strategy
+
+@pytest.fixture
+def hop_lp_token():
+    # WETH LP Token
+    token_address = "0x59745774Ed5EfF903e615F5A2282Cae03484985a"
+    yield Contract(token_address)
+
+@pytest.fixture
+def hop_pool():
+    # WETH Pool
+    address = "0x652d27c0F72771Ce5C76fd400edD61B406Ac6D97"
+    yield Contract(address)
 
 
 @pytest.fixture(scope="session")

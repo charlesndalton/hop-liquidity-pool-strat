@@ -1,7 +1,22 @@
 # use Ganache's forked mainnet mode as the default network
 # NOTE: You don't *have* to do this, but it is often helpful for testing
 networks:
-  default: mainnet-fork
+  default: arbitrum-main-fork
+
+# since brownie doesn't have arbitrum fork out of the box, you'll need to add
+# open ~/.brownie/network-config.yaml and add the following entry under 'development':
+  # - name: Ganache-CLI (Arbitrum-Mainnet Fork)
+  #   id: arbitrum-main-fork
+  #   cmd: ganache-cli
+  #   host: http://127.0.0.1
+  #   timeout: 120
+  #   cmd_settings:
+  #     port: 8545
+  #     gas_limit: 12000000
+  #     accounts: 10
+  #     evm_version: istanbul
+  #     mnemonic: brownie
+  #     fork: arbitrum-main
 
 # automatically fetch contract sources from Etherscan
 autofetch_sources: True
